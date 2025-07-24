@@ -60,7 +60,7 @@ numpy==2.1.1
 packaging==24.0
 pandas==2.2.3
 parso==0.8.4
-Pillow==10.0.1
+Pillow==9.5.0
 platformdirs==4.2.0
 prompt-toolkit==3.0.43
 proxy_tools==0.1.0
