@@ -3,25 +3,26 @@ from flask_cors import CORS
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from textblob import TextBlob
-import requests
-from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 CORS(app)
 
+# Initialize VADER analyzer
 vader_analyzer = SentimentIntensityAnalyzer()
 
+# Load Hugging Face model & tokenizer
 tokenizer = AutoTokenizer.from_pretrained("Abirate/gpt_3_finetuned_multi_x_science")
 model = AutoModelForCausalLM.from_pretrained("Abirate/gpt_3_finetuned_multi_x_science")
 
+# Helper to truncate text to a certain number of words
 def truncate_text(text, max_words=150):
     words = text.split()
     return ' '.join(words[:max_words])
 
+# Perform sentiment analysis using both VADER and Hugging Face
 def analyze_text(text):
     vader_scores = vader_analyzer.polarity_scores(text)
 
-    # Truncate for Hugging Face
     short_text = truncate_text(text)
 
     input_ids = tokenizer.encode(short_text, return_tensors="pt")
@@ -45,48 +46,19 @@ def analyze_text(text):
         }
     }
 
-def extract_reviews_from_url(url):
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
-    }
-    reviews = []
-    try:
-        response = requests.get(url, headers=headers)
-        soup = BeautifulSoup(response.text, 'html.parser')
-
-        if "amazon" in url:
-            review_blocks = soup.find_all("span", {"data-hook": "review-body"})
-        elif "flipkart" in url:
-            review_blocks = soup.find_all("div", class_="t-ZTKy")
-        else:
-            review_blocks = []
-
-        for rb in review_blocks:
-            text = rb.get_text(strip=True)
-            if text:
-                reviews.append(text)
-    except Exception as e:
-        print("Failed to fetch reviews:", e)
-
-    return reviews
-
+# Flask route for comparison
 @app.route('/analyze-comparison', methods=['POST'])
 def analyze_comparison():
     data = request.get_json()
     text = data.get('text', '')
     file_content = data.get('fileContent', '')
-    url = data.get('url', '')
 
     combined_texts = []
 
     if text:
-        combined_texts.append(text)
+        combined_texts.append(truncate_text(text))
     if file_content:
         combined_texts.append(truncate_text(file_content))
-    if url:
-        reviews = extract_reviews_from_url(url)
-        short_reviews = [truncate_text(r) for r in reviews[:5]]
-        combined_texts.extend(short_reviews)
 
     if not combined_texts:
         return jsonify({'error': 'No valid input provided'}), 400

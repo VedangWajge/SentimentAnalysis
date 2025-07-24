@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   Activity,
   FileText,
-  Link,
   Keyboard
 } from 'lucide-react';
 import { Bar } from 'react-chartjs-2';
@@ -13,7 +12,6 @@ const App = () => {
   const [inputType, setInputType] = useState('text');
   const [textInput, setTextInput] = useState('');
   const [fileContent, setFileContent] = useState('');
-  const [productURL, setProductURL] = useState('');
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
@@ -26,12 +24,11 @@ const App = () => {
         body: JSON.stringify({
           text: inputType === 'text' ? content : '',
           fileContent: inputType === 'file' ? content : '',
-          url: inputType === 'url' ? content : ''
         })
       });
       const data = await res.json();
       if (Array.isArray(data)) {
-        setResult(data[0]); // Show only first result for now
+        setResult(data[0]);
       } else {
         setResult(data);
       }
@@ -45,7 +42,6 @@ const App = () => {
     let content = '';
     if (inputType === 'text') content = textInput;
     if (inputType === 'file') content = fileContent;
-    if (inputType === 'url') content = productURL;
     if (content.trim()) fetchSentiment(content);
   };
 
@@ -103,7 +99,6 @@ const App = () => {
         <div className="flex gap-4">
           <button onClick={() => setInputType('text')} className={`px-4 py-2 rounded ${inputType === 'text' ? 'bg-blue-600 text-white' : 'bg-white border'}`}><Keyboard className="inline w-4 mr-1" /> Text</button>
           <button onClick={() => setInputType('file')} className={`px-4 py-2 rounded ${inputType === 'file' ? 'bg-blue-600 text-white' : 'bg-white border'}`}><FileText className="inline w-4 mr-1" /> File</button>
-          <button onClick={() => setInputType('url')} className={`px-4 py-2 rounded ${inputType === 'url' ? 'bg-blue-600 text-white' : 'bg-white border'}`}><Link className="inline w-4 mr-1" /> URL</button>
         </div>
 
         {inputType === 'text' && (
@@ -114,14 +109,10 @@ const App = () => {
           <input type="file" accept=".txt" onChange={handleFileUpload} />
         )}
 
-        {inputType === 'url' && (
-          <input type="text" value={productURL} onChange={e => setProductURL(e.target.value)} className="w-full p-2 border rounded" placeholder="Paste Amazon or Flipkart product URL" />
-        )}
-
         <button
           onClick={handleAnalyze}
           className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700"
-          disabled={loading || (!textInput && !fileContent && !productURL)}
+          disabled={loading || (!textInput && !fileContent)}
         >
           {loading ? 'Analyzing...' : 'Analyze Sentiment'}
         </button>
@@ -129,13 +120,14 @@ const App = () => {
         {result && (
           <div className="space-y-6">
             {chartData && <Bar data={chartData} />}
-            
+
             <div className="bg-gray-100 p-4 border rounded">
               <h3 className="font-semibold mb-2 text-gray-700">Analyzed Text:</h3>
               <p className="text-sm text-gray-700 whitespace-pre-line">{result.input}</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* VADER */}
               <div className="bg-white p-6 border rounded">
                 <h3 className="text-blue-700 font-semibold mb-2">VADER Results</h3>
                 <p>Positive: {(result.vader.pos * 100).toFixed(2)}%</p>
@@ -144,11 +136,18 @@ const App = () => {
                 <p>Compound: {result.vader.compound}</p>
               </div>
 
+              {/* Hugging Face */}
               <div className="bg-white p-6 border rounded">
                 <h3 className="text-purple-700 font-semibold mb-2">Hugging Face Results</h3>
-                <p>Sentiment: {result.huggingface.sentiment}</p>
-                <p>Polarity: {result.huggingface.polarity}</p>
-                <p className="italic">Generated: {result.huggingface.response}</p>
+                <p><strong>Sentiment:</strong> {result.huggingface.sentiment}</p>
+                <p><strong>Polarity:</strong> {Number(result.huggingface.polarity).toFixed(2)}</p>
+                <p className="italic mt-2"><strong>Generated Summary:</strong><br />
+                  {result.huggingface.response.split('.').slice(0, 2).join('. ') + '.'}
+                </p>
+                <p className="mt-2 text-sm text-gray-600">
+                  <strong>Note:</strong> The model analyzes the tone based on overall context and phrasing.
+                  A polarity above 0.1 generally indicates a positive tone.
+                </p>
               </div>
             </div>
           </div>
