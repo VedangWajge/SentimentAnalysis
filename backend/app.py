@@ -3,6 +3,7 @@ from flask_cors import CORS
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from textblob import TextBlob
+import os
 
 app = Flask(__name__)
 CORS(app)
@@ -13,6 +14,11 @@ vader_analyzer = SentimentIntensityAnalyzer()
 # Load Hugging Face model & tokenizer
 tokenizer = AutoTokenizer.from_pretrained("Abirate/gpt_3_finetuned_multi_x_science")
 model = AutoModelForCausalLM.from_pretrained("Abirate/gpt_3_finetuned_multi_x_science")
+
+@app.route("/")
+def home():
+    return "Sentiment Analysis Backend is live!"
+
 
 # Helper to truncate text to a certain number of words
 def truncate_text(text, max_words=150):
@@ -72,4 +78,5 @@ def analyze_comparison():
     return jsonify(all_results)
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))  # Render provides this automatically
+    app.run(debug=False, host="0.0.0.0", port=port)
