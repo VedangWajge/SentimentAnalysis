@@ -1,7 +1,8 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
-from transformers import pipeline
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from textblob import TextBlob
 import os
 
 app = Flask(__name__)
@@ -10,12 +11,9 @@ CORS(app)
 # Initialize VADER analyzer
 vader_analyzer = SentimentIntensityAnalyzer()
 
-# Initialize Hugging Face sentiment pipeline (lightweight)
-sentiment_pipeline = pipeline("sentiment-analysis", model="distilbert-base-uncased-finetuned-sst-2-english")
-
-@app.route("/")
-def home():
-    return "Sentiment Analysis Backend is live!"
+# Load Hugging Face model & tokenizer
+tokenizer = AutoTokenizer.from_pretrained("Abirate/gpt_3_finetuned_multi_x_science")
+model = AutoModelForCausalLM.from_pretrained("Abirate/gpt_3_finetuned_multi_x_science")
 
 # Helper to truncate text to a certain number of words
 def truncate_text(text, max_words=150):
@@ -24,27 +22,32 @@ def truncate_text(text, max_words=150):
 
 # Perform sentiment analysis using both VADER and Hugging Face
 def analyze_text(text):
-    truncated = truncate_text(text)
-    vader_scores = vader_analyzer.polarity_scores(truncated)
+    vader_scores = vader_analyzer.polarity_scores(text)
 
-    try:
-        hf_result = sentiment_pipeline(truncated[:512])[0]  # avoid long inputs
-        hf_sentiment = hf_result['label']
-        hf_score = hf_result['score']
-    except Exception as e:
-        hf_sentiment = "Error"
-        hf_score = str(e)
+    short_text = truncate_text(text)
+
+    input_ids = tokenizer.encode(short_text, return_tensors="pt")
+    output = model.generate(input_ids, max_length=150, num_return_sequences=1, no_repeat_ngram_size=2)
+    response = tokenizer.decode(output[0], skip_special_tokens=True)
+
+    polarity = TextBlob(response).sentiment.polarity
+    if polarity > 0.1:
+        hf_sentiment = "Positive"
+    elif polarity < -0.1:
+        hf_sentiment = "Negative"
+    else:
+        hf_sentiment = "Neutral"
 
     return {
-        "input": truncated,
         "vader": vader_scores,
         "huggingface": {
+            "response": response,
             "sentiment": hf_sentiment,
-            "confidence": hf_score
+            "polarity": polarity
         }
     }
 
-# Route to compare results
+# Flask route for comparison
 @app.route('/analyze-comparison', methods=['POST'])
 def analyze_comparison():
     data = request.get_json()
@@ -52,17 +55,23 @@ def analyze_comparison():
     file_content = data.get('fileContent', '')
 
     combined_texts = []
+
     if text:
-        combined_texts.append(text)
+        combined_texts.append(truncate_text(text))
     if file_content:
-        combined_texts.append(file_content)
+        combined_texts.append(truncate_text(file_content))
 
     if not combined_texts:
         return jsonify({'error': 'No valid input provided'}), 400
 
-    results = [analyze_text(txt) for txt in combined_texts]
-    return jsonify(results)
+    all_results = []
+    for txt in combined_texts:
+        result = analyze_text(txt)
+        result['input'] = txt
+        all_results.append(result)
+
+    return jsonify(all_results)
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 5000))  # Render provides this automatically
     app.run(debug=False, host="0.0.0.0", port=port)
